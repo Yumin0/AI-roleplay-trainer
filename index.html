@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 角色演練</title>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background: #f5f5f5; color: #1a1a1a; min-height: 100vh;
+         display: flex; align-items: center; justify-content: center; }
+
+  /* ── Pages ── */
+  .page { display: none; width: 100%; }
+  .page.active { display: flex; }
+
+  /* ════════════════════════════════
+     PAGE 1 — 開始頁
+  ════════════════════════════════ */
+  #page-start {
+    align-items: center; justify-content: center;
+    min-height: 100vh; padding: 24px;
+  }
+  .start-card {
+    background: #fff; border-radius: 20px;
+    border: 1px solid #e8e8e8;
+    padding: 40px 48px; width: 100%; max-width: 540px;
+  }
+  .tag { font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+         text-transform: uppercase; color: #888; text-align: center;
+         margin-bottom: 10px; }
+  .start-title { font-size: 24px; font-weight: 600; text-align: center;
+                 margin-bottom: 32px; line-height: 1.3; }
+
+  /* 角色選擇 */
+  .field-label { font-size: 12px; font-weight: 600; color: #555;
+                 margin-bottom: 10px; letter-spacing: 0.03em; }
+  .avatar-row { display: flex; gap: 20px; justify-content: center; margin-bottom: 28px; }
+  .avatar-opt { display: flex; flex-direction: column; align-items: center;
+                gap: 8px; cursor: pointer; }
+  .avatar-circle {
+    width: 88px; height: 88px; border-radius: 50%;
+    background: #f0f0f0; display: flex; align-items: center;
+    justify-content: center; font-size: 40px;
+    border: 2.5px solid transparent; transition: border-color 0.15s;
+  }
+  .avatar-opt.selected .avatar-circle { border-color: #1a73e8; }
+  .avatar-opt-label { font-size: 13px; font-weight: 500; color: #555; }
+  .avatar-badge {
+    font-size: 11px; background: #e8f0fe; color: #1a73e8;
+    padding: 2px 10px; border-radius: 20px; opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .avatar-opt.selected .avatar-badge { opacity: 1; }
+
+  /* 輸入欄 */
+  .field { margin-bottom: 20px; }
+  .field input, .field textarea {
+    width: 100%; border: 1px solid #ddd; border-radius: 10px;
+    padding: 10px 14px; font-size: 14px; color: #1a1a1a;
+    background: #fff; outline: none; transition: border-color 0.15s;
+    font-family: inherit;
+  }
+  .field input:focus, .field textarea:focus { border-color: #1a73e8; }
+  .field textarea { height: 72px; resize: none; }
+  .field-hint { font-size: 11px; color: #aaa; margin-top: 5px; }
+
+  /* 開始按鈕 */
+  #btn-start {
+    width: 100%; height: 46px; border-radius: 10px; border: none;
+    background: #1a1a1a; color: #fff; font-size: 15px; font-weight: 500;
+    cursor: pointer; transition: opacity 0.15s; margin-top: 4px;
+  }
+  #btn-start:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ════════════════════════════════
+     PAGE 2 — 訓練對話頁
+  ════════════════════════════════ */
+  #page-training {
+    align-items: stretch; min-height: 100vh;
+  }
+  .training-left {
+    width: 220px; min-height: 100vh; flex-shrink: 0;
+    background: #fff; border-right: 1px solid #e8e8e8;
+    padding: 28px 20px; display: flex; flex-direction: column;
+  }
+  .training-tag { font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+                  text-transform: uppercase; color: #aaa; margin-bottom: 6px; }
+  .training-title { font-size: 14px; font-weight: 600; color: #1a1a1a;
+                    margin-bottom: 20px; line-height: 1.4; }
+  .char-row-sm { display: flex; align-items: center; gap: 10px;
+                 padding-bottom: 18px; border-bottom: 1px solid #f0f0f0;
+                 margin-bottom: 18px; }
+  .char-ava-sm { width: 42px; height: 42px; border-radius: 50%;
+                 background: #fce8f0; display: flex; align-items: center;
+                 justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .char-name-sm { font-size: 14px; font-weight: 600; }
+  .char-sub-sm  { font-size: 11px; color: #aaa; }
+  .slabel { font-size: 10px; font-weight: 600; color: #aaa;
+            text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+  .scenario-box { background: #f7f7f7; border-radius: 8px; padding: 10px 12px;
+                  font-size: 12px; color: #555; line-height: 1.6; }
+  .spacer { flex: 1; }
+  #btn-end {
+    width: 100%; height: 36px; border-radius: 8px; border: 1px solid #ddd;
+    background: none; color: #888; font-size: 12px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  #btn-end:hover { border-color: #bbb; color: #555; }
+
+  /* 右側 */
+  .training-right {
+    flex: 1; background: #fff; display: flex;
+    flex-direction: column; align-items: center;
+    justify-content: center; padding: 32px 40px;
+  }
+  .portrait-wrap {
+    width: 100%; max-width: 320px; aspect-ratio: 3/4;
+    border-radius: 14px; overflow: hidden;
+    background: #f5f0f5; border: 1px solid #e8e8e8;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; margin-bottom: 18px; flex-shrink: 0;
+  }
+  .portrait-placeholder { text-align: center; }
+  .portrait-placeholder .p-icon { font-size: 72px; margin-bottom: 8px; }
+  .portrait-placeholder .p-hint { font-size: 12px; color: #bbb; }
+  .sparkle { position: absolute; bottom: 14px; right: 16px;
+             font-size: 20px; opacity: 0.4; }
+
+  .ai-status { font-size: 14px; font-weight: 600; color: #1a73e8;
+               min-height: 20px; margin-bottom: 16px; letter-spacing: 0.02em; }
+
+  .ctrl-row { display: flex; align-items: center; gap: 14px; }
+  .ctrl-pill {
+    height: 38px; padding: 0 20px; border-radius: 100px;
+    border: 1px solid #ddd; background: none; font-size: 13px;
+    color: #555; cursor: pointer;
+  }
+  .ctrl-pill:hover { border-color: #bbb; }
+  .mic-btn {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: #fce8e8; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .mic-btn.active { background: #1a73e8; }
+  .mic-btn.active svg { stroke: #fff; }
+  .ctrl-hint { font-size: 12px; color: #aaa; margin-top: 10px; }
+
+  /* ════════════════════════════════
+     PAGE 3 — 訓練結束
+  ════════════════════════════════ */
+  #page-report {
+    align-items: center; justify-content: center;
+    min-height: 100vh; padding: 24px;
+  }
+  .report-card {
+    background: #fff; border-radius: 20px; border: 1px solid #e8e8e8;
+    padding: 36px 40px; width: 100%; max-width: 520px;
+  }
+  .report-head { text-align: center; margin-bottom: 24px; }
+  .check-circle {
+    width: 52px; height: 52px; border-radius: 50%; background: #e6f4ea;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 14px;
+  }
+  .report-title { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .report-sub { font-size: 13px; color: #888; }
+  .stat-row { display: grid; grid-template-columns: 1fr 1fr;
+              gap: 12px; margin-bottom: 24px; }
+  .stat-box { background: #f7f7f7; border-radius: 10px;
+              padding: 14px; text-align: center; }
+  .stat-val { font-size: 22px; font-weight: 600; }
+  .stat-label { font-size: 12px; color: #aaa; margin-top: 2px; }
+  .transcript-label { font-size: 12px; font-weight: 600; color: #555;
+                      margin-bottom: 8px; }
+  .transcript-box {
+    background: #f7f7f7; border-radius: 10px; padding: 14px;
+    font-size: 13px; color: #555; line-height: 1.8;
+    max-height: 200px; overflow-y: auto; margin-bottom: 20px;
+  }
+  .t-line { margin-bottom: 6px; }
+  .t-speaker { font-size: 10px; font-weight: 600; color: #aaa;
+               text-transform: uppercase; display: block; margin-bottom: 2px; }
+  .t-line.user .t-speaker { color: #1a73e8; }
+  .report-btns { display: flex; gap: 10px; }
+  .btn-secondary {
+    flex: 1; height: 44px; border-radius: 10px;
+    border: 1px solid #ddd; background: none;
+    font-size: 14px; color: #555; cursor: pointer;
+  }
+  .btn-primary {
+    flex: 1; height: 44px; border-radius: 10px; border: none;
+    background: #1a1a1a; color: #fff; font-size: 14px;
+    font-weight: 500; cursor: pointer;
+  }
+
+  /* ── Loading overlay ── */
+  #loading {
+    display: none; position: fixed; inset: 0;
+    background: rgba(255,255,255,0.85);
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 12px; z-index: 999;
+    font-size: 14px; color: #555;
+  }
+  #loading.show { display: flex; }
+  .spinner {
+    width: 28px; height: 28px; border: 2.5px solid #e0e0e0;
+    border-top-color: #1a73e8; border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ─── Loading overlay ─── -->
+<div id="loading">
+  <div class="spinner"></div>
+  <span id="loading-text">連線中...</span>
+</div>
+
+<!-- ════════════════════════════════
+     PAGE 1 — 開始頁
+════════════════════════════════ -->
+<div id="page-start" class="page active">
+  <div class="start-card">
+    <div class="tag">Training</div>
+    <div class="start-title">AI 角色演練</div>
+
+    <div class="field-label">選擇角色</div>
+    <div class="avatar-row">
+      <div class="avatar-opt" id="opt-female" onclick="selectGender('female')">
+        <div class="avatar-circle">👩‍💼</div>
+        <div class="avatar-opt-label">女性角色</div>
+        <div class="avatar-badge">已選擇</div>
+      </div>
+      <div class="avatar-opt" id="opt-male" onclick="selectGender('male')">
+        <div class="avatar-circle">👨‍💼</div>
+        <div class="avatar-opt-label">男性角色</div>
+        <div class="avatar-badge">已選擇</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">對方姓名 <span style="color:#e53935;font-size:11px;">必填</span></div>
+      <input id="input-name" type="text" placeholder="例如：Pam" oninput="validateForm()">
+    </div>
+
+    <div class="field">
+      <div class="field-label">情境說明 <span style="color:#aaa;font-size:11px;">選填</span></div>
+      <textarea id="input-scenario" placeholder="描述本次演練的背景情境..."></textarea>
+      <div class="field-hint">不填寫則使用 AI 預設情境</div>
+    </div>
+
+    <button id="btn-start" disabled onclick="startTraining()">開始訓練</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     PAGE 2 — 訓練對話頁
+════════════════════════════════ -->
+<div id="page-training" class="page">
+  <div class="training-left">
+    <div class="training-tag">Training</div>
+    <div class="training-title">AI 角色演練</div>
+
+    <div class="char-row-sm">
+      <div class="char-ava-sm" id="left-avatar">👩‍💼</div>
+      <div>
+        <div class="char-name-sm" id="left-name">—</div>
+        <div class="char-sub-sm" id="left-gender">女性角色</div>
+      </div>
+    </div>
+
+    <div class="slabel">情境說明</div>
+    <div class="scenario-box" id="left-scenario">（未填寫）</div>
+
+    <div class="spacer"></div>
+
+    <button id="btn-end" onclick="endTraining()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+      結束訓練
+    </button>
+  </div>
+
+  <div class="training-right">
+    <div class="portrait-wrap">
+      <div class="portrait-placeholder">
+        <div class="p-icon" id="portrait-icon">👩‍💼</div>
+        <div class="p-hint">動畫人像區</div>
+      </div>
+      <div class="sparkle">✦</div>
+    </div>
+
+    <div class="ai-status" id="ai-status">等待連線...</div>
+
+    <div class="ctrl-row">
+      <button class="ctrl-pill" onclick="toggleDialog()">Dialog</button>
+      <button class="mic-btn" id="mic-btn" onclick="toggleMic()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="#c04848" stroke-width="2" stroke-linecap="round" id="mic-icon">
+          <rect x="9" y="2" width="6" height="12" rx="3"/>
+          <path d="M5 10a7 7 0 0014 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+        </svg>
+      </button>
+      <button class="ctrl-pill" onclick="togglePause()">Pause</button>
+    </div>
+    <div class="ctrl-hint" id="ctrl-hint">連線後即可開始說話</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     PAGE 3 — 訓練結束報告
+════════════════════════════════ -->
+<div id="page-report" class="page">
+  <div class="report-card">
+    <div class="report-head">
+      <div class="check-circle">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+             stroke="#34a853" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="report-title">訓練完成</div>
+      <div class="report-sub" id="report-sub">與 Pam 的演練已結束</div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-val" id="stat-duration">—</div>
+        <div class="stat-label">訓練時長</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="stat-turns">—</div>
+        <div class="stat-label">對話輪次</div>
+      </div>
+    </div>
+
+    <div class="transcript-label">對話逐字稿</div>
+    <div class="transcript-box" id="transcript-box">
+      <div style="color:#bbb;font-size:12px;">（本次對話記錄將顯示於此）</div>
+    </div>
+
+    <div class="report-btns">
+      <button class="btn-secondary" onclick="resetToStart()">再練一次</button>
+      <button class="btn-primary" onclick="goHome()">完成</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 請把你的 GAS Web App URL 填在這裡 ──
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxIDW8Y-QvX-r4AI3TILK82GaJPFVnEiqU87pUAb3scf9rmhJgwlDNy6HtzF7w8_x6cWw/exec';
+
+// ── 狀態 ──
+let selectedGender = '';
+let sessionData    = {};   // { sessionId, conversationId, livekitUrl, accessToken }
+let room           = null;
+let micEnabled     = false;
+let paused         = false;
+let startTime      = null;
+let turnCount      = 0;
+let transcript     = [];   // [{ speaker:'ai'|'user', text }]
+
+// ════════════════════
+// PAGE 1 邏輯
+// ════════════════════
+function selectGender(g) {
+  selectedGender = g;
+  document.getElementById('opt-female').classList.toggle('selected', g === 'female');
+  document.getElementById('opt-male').classList.toggle('selected',   g === 'male');
+  validateForm();
+}
+
+function validateForm() {
+  const name = document.getElementById('input-name').value.trim();
+  document.getElementById('btn-start').disabled = !(selectedGender && name);
+}
+
+async function startTraining() {
+  const name     = document.getElementById('input-name').value.trim();
+  const scenario = document.getElementById('input-scenario').value.trim();
+
+  showLoading('建立語音連線中...');
+
+  try {
+    const url = `${GAS_URL}?action=getVoiceToken&gender=${encodeURIComponent(selectedGender)}&name=${encodeURIComponent(name)}&scenario=${encodeURIComponent(scenario)}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    if (!data.ok) throw new Error(data.error || 'GAS 回傳錯誤');
+
+    sessionData = data;
+    startTime   = Date.now();
+    turnCount   = 0;
+    transcript  = [];
+
+    // 更新左側資訊
+    const emoji = selectedGender === 'female' ? '👩‍💼' : '👨‍💼';
+    document.getElementById('left-avatar').textContent   = emoji;
+    document.getElementById('portrait-icon').textContent = emoji;
+    document.getElementById('left-name').textContent     = name;
+    document.getElementById('left-gender').textContent   = selectedGender === 'female' ? '女性角色' : '男性角色';
+    document.getElementById('left-scenario').textContent = scenario || '（使用預設情境）';
+
+    showPage('page-training');
+    hideLoading();
+
+    await connectLiveKit(data.livekitUrl, data.accessToken, name);
+
+  } catch (err) {
+    hideLoading();
+    alert('連線失敗：' + err.message);
+  }
+}
+
+// ════════════════════
+// LiveKit 連線
+// ════════════════════
+async function connectLiveKit(livekitUrl, token, charName) {
+  try {
+    room = new LivekitClient.Room({
+      adaptiveStream: true,
+      dynacast: true,
+    });
+
+    room.on(LivekitClient.RoomEvent.Connected, () => {
+      setStatus('已連線，等待 ' + charName + ' 說話...');
+      document.getElementById('ctrl-hint').textContent = '點擊麥克風開始說話';
+    });
+
+    room.on(LivekitClient.RoomEvent.Disconnected, () => {
+      setStatus('已中斷連線');
+    });
+
+    // 接收 AI 語音
+    room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+      if (track.kind === LivekitClient.Track.Kind.Audio) {
+        const el = track.attach();
+        document.body.appendChild(el);
+        setStatus('Speaking...');
+      }
+    });
+
+    room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+      track.detach();
+      setStatus('聆聽中...');
+    });
+
+    // 接收逐字稿（DataChannel）
+    room.on(LivekitClient.RoomEvent.DataReceived, (data) => {
+      try {
+        const msg = JSON.parse(new TextDecoder().decode(data));
+        const text = msg.text || msg.content || msg.transcript || '';
+        if (text) {
+          const speaker = msg.role === 'user' ? 'user' : 'ai';
+          addTranscriptLine(speaker, text, charName);
+        }
+      } catch (_) {}
+    });
+
+    await room.connect(livekitUrl, token);
+  } catch (err) {
+    setStatus('連線錯誤：' + err.message);
+    console.error(err);
+  }
+}
+
+function addTranscriptLine(speaker, text, charName) {
+  transcript.push({ speaker, text });
+  if (speaker === 'ai') turnCount++;
+}
+
+// ════════════════════
+// 麥克風控制
+// ════════════════════
+async function toggleMic() {
+  if (!room) return;
+  micEnabled = !micEnabled;
+  await room.localParticipant.setMicrophoneEnabled(micEnabled);
+
+  const btn  = document.getElementById('mic-btn');
+  const icon = document.getElementById('mic-icon');
+  btn.classList.toggle('active', micEnabled);
+  icon.setAttribute('stroke', micEnabled ? '#fff' : '#c04848');
+  document.getElementById('ctrl-hint').textContent =
+    micEnabled ? '說話中...' : '點擊麥克風開始說話';
+}
+
+function toggleDialog() { /* 可日後加對話文字顯示面板 */ }
+
+function togglePause() {
+  paused = !paused;
+  if (room) {
+    room.localParticipant.setMicrophoneEnabled(!paused && micEnabled);
+  }
+  setStatus(paused ? '已暫停' : '聆聽中...');
+}
+
+// ════════════════════
+// 結束訓練
+// ════════════════════
+async function endTraining() {
+  if (room) {
+    room.disconnect();
+    room = null;
+  }
+
+  // 通知 GAS 寫入 ended_at
+  if (sessionData.sessionId) {
+    fetch(`${GAS_URL}?action=saveSession&sessionId=${sessionData.sessionId}`)
+      .catch(() => {});
+  }
+
+  // 統計
+  const elapsed = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+  const mins    = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const secs    = String(elapsed % 60).padStart(2, '0');
+
+  const name = document.getElementById('left-name').textContent;
+  document.getElementById('report-sub').textContent  = `與 ${name} 的演練已結束`;
+  document.getElementById('stat-duration').textContent = `${mins}:${secs}`;
+  document.getElementById('stat-turns').textContent    = String(turnCount);
+
+  // 逐字稿
+  const box = document.getElementById('transcript-box');
+  if (transcript.length === 0) {
+    box.innerHTML = '<div style="color:#bbb;font-size:12px;">（本次無對話記錄）</div>';
+  } else {
+    box.innerHTML = transcript.map(t => `
+      <div class="t-line ${t.speaker}">
+        <span class="t-speaker">${t.speaker === 'ai' ? name : '你'}</span>
+        ${t.text}
+      </div>`).join('');
+  }
+
+  showPage('page-report');
+}
+
+// ════════════════════
+// 報告頁按鈕
+// ════════════════════
+function resetToStart() {
+  selectedGender = '';
+  sessionData    = {};
+  document.getElementById('opt-female').classList.remove('selected');
+  document.getElementById('opt-male').classList.remove('selected');
+  document.getElementById('input-name').value     = '';
+  document.getElementById('input-scenario').value = '';
+  document.getElementById('btn-start').disabled   = true;
+  showPage('page-start');
+}
+
+function goHome() { resetToStart(); }
+
+// ════════════════════
+// 工具函式
+// ════════════════════
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function setStatus(txt) {
+  document.getElementById('ai-status').textContent = txt;
+}
+function showLoading(txt) {
+  document.getElementById('loading-text').textContent = txt;
+  document.getElementById('loading').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loading').classList.remove('show');
+}
+</script>
+</body>
+</html>
